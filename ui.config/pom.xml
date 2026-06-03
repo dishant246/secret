@@ -28,6 +28,14 @@
                     <group>com.myproject</group>
                     <name>myproject.ui.config</name>
                     <packageType>application</packageType>
+                    <validatorsSettings>
+                        <jackrabbit-packagetype>
+                            <isDisabled>true</isDisabled>
+                        </jackrabbit-packagetype>
+                        <jackrabbit-filter>
+                            <isDisabled>true</isDisabled>
+                        </jackrabbit-filter>
+                    </validatorsSettings>
                 </configuration>
             </plugin>
         </plugins>
