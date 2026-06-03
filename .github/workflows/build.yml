@@ -1,0 +1,77 @@
+name: Build and Validate OSGI Config with Secrets
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+
+      # Inject the GitHub Secret into the OSGI config file
+      - name: Inject API Key into OSGI config
+        run: |
+          CONFIG_FILE="ui.config/src/main/content/jcr_root/apps/myproject/osgiconfig/config/com.myproject.core.services.impl.ApiServiceImpl.cfg.json"
+          echo "=== Before substitution ==="
+          cat "$CONFIG_FILE"
+          sed -i "s|__API_KEY__|${{ secrets.API_KEY }}|g" "$CONFIG_FILE"
+          echo ""
+          echo "=== After substitution ==="
+          echo "(Verifying placeholder was replaced - value is masked)"
+          # Verify the placeholder is gone without printing the actual secret
+          if grep -q "__API_KEY__" "$CONFIG_FILE"; then
+            echo "ERROR: Placeholder __API_KEY__ was NOT replaced!"
+            exit 1
+          else
+            echo "SUCCESS: Placeholder was replaced with the secret value."
+          fi
+
+      # Build the project
+      - name: Build with Maven
+        run: mvn clean install -B
+
+      # Validate the built content package contains the substituted config
+      - name: Validate content package
+        run: |
+          echo "=== Checking built content package ==="
+          PACKAGE_PATH="ui.config/target/myproject.ui.config-1.0.0-SNAPSHOT.zip"
+          if [ -f "$PACKAGE_PATH" ]; then
+            echo "Content package built successfully: $PACKAGE_PATH"
+            # Extract and verify the config inside the ZIP
+            unzip -p "$PACKAGE_PATH" "jcr_root/apps/myproject/osgiconfig/config/com.myproject.core.services.impl.ApiServiceImpl.cfg.json" > /tmp/extracted_config.json
+            echo "Extracted OSGI config from package:"
+            # Check placeholder is not present in the packaged artifact
+            if grep -q "__API_KEY__" /tmp/extracted_config.json; then
+              echo "FAIL: Placeholder still present in packaged artifact!"
+              exit 1
+            else
+              echo "PASS: Secret was correctly injected into the content package."
+              echo "Config structure (secret value masked):"
+              sed 's/"apiKey": ".*"/"apiKey": "***MASKED***"/' /tmp/extracted_config.json
+            fi
+          else
+            echo "ERROR: Content package not found at $PACKAGE_PATH"
+            ls -la ui.config/target/ || true
+            exit 1
+          fi
+
+      # Upload the built artifact for inspection (optional)
+      - name: Upload content package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-config-package
+          path: ui.config/target/*.zip

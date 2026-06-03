@@ -1,0 +1,6 @@
+{
+    "apiKey": "__API_KEY__",
+    "apiEndpoint": "https://api.example.com/v1",
+    "connectionTimeout": 5000,
+    "enabled": true
+}
